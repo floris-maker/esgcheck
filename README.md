@@ -13,10 +13,12 @@ A domain that routes mail through a security gateway has **MX records pointing a
 ## Install
 
 ```bash
-pip install esgcheck
+pip install git+https://github.com/floris-maker/esgcheck
 ```
 
-Or from source:
+> A PyPI release (`pip install esgcheck`) is planned. Until then, install from GitHub as above.
+
+Or from a clone:
 
 ```bash
 git clone https://github.com/floris-maker/esgcheck
