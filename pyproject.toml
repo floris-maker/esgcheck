@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "esgcheck"
+version = "0.1.0"
+description = "Detect which Email Security Gateway (ESG) a domain sits behind, from its MX records."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "Floris Jansen" }]
+keywords = ["email", "security", "gateway", "esg", "mx", "deliverability", "dns", "cold-email"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Communications :: Email",
+    "Topic :: Internet :: Name Service (DNS)",
+]
+dependencies = ["dnspython>=2.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/floris-maker/esgcheck"
+Issues = "https://github.com/floris-maker/esgcheck/issues"
+
+[project.scripts]
+esgcheck = "esgcheck.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["esgcheck*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

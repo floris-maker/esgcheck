@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Detect which Email Security Gateway (ESG) a domain sits behind, from its MX records.">
+<title>esgcheck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+  :root {
+    /* light — cool network-console neutrals, slate biased toward the blue accent */
+    --bg: #EBEEF3;
+    --surface: #FFFFFF;
+    --surface-2: #F4F6FA;
+    --ink: #10131A;
+    --muted: #58616F;
+    --faint: #8A93A2;
+    --line: #DBE0E9;
+    --accent: #1F5FE0;
+    --accent-ink: #FFFFFF;
+
+    --gateway: #C2410C;      --gateway-bg: #FBE5DC;   --gateway-line: #EBC3A9;
+    --native: #0F766E;       --native-bg: #DBF1EE;    --native-line: #A9DBD4;
+    --unknown: #55606F;      --unknown-bg: #E7EBF1;   --unknown-line: #CBD3DE;
+    --nomx: #9F1239;         --nomx-bg: #F7DEE5;      --nomx-line: #E7B6C2;
+
+    --shadow: 0 1px 2px rgba(16,19,26,.04), 0 12px 34px -18px rgba(16,19,26,.30);
+    --radius: 14px;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #0A0D13;
+      --surface: #12161F;
+      --surface-2: #171C27;
+      --ink: #E7ECF3;
+      --muted: #96A1B2;
+      --faint: #66707F;
+      --line: #232A38;
+      --accent: #5B8DEF;
+      --accent-ink: #0A0D13;
+
+      --gateway: #FB923C;    --gateway-bg: #2A1A10;   --gateway-line: #4A2D18;
+      --native: #2DD4BF;     --native-bg: #0C201E;    --native-line: #17403A;
+      --unknown: #9AA6B6;    --unknown-bg: #1A202B;   --unknown-line: #2C3543;
+      --nomx: #FB7185;       --nomx-bg: #2A1219;      --nomx-line: #4A1F2C;
+
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 18px 40px -22px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0A0D13;
+    --surface: #12161F;
+    --surface-2: #171C27;
+    --ink: #E7ECF3;
+    --muted: #96A1B2;
+    --faint: #66707F;
+    --line: #232A38;
+    --accent: #5B8DEF;
+    --accent-ink: #0A0D13;
+
+    --gateway: #FB923C;    --gateway-bg: #2A1A10;   --gateway-line: #4A2D18;
+    --native: #2DD4BF;     --native-bg: #0C201E;    --native-line: #17403A;
+    --unknown: #9AA6B6;    --unknown-bg: #1A202B;   --unknown-line: #2C3543;
+    --nomx: #FB7185;       --nomx-bg: #2A1219;      --nomx-line: #4A1F2C;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 18px 40px -22px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: clamp(28px, 5vw, 64px) clamp(18px, 4vw, 40px) 80px; }
+
+  .mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+
+  /* ---- masthead ---- */
+  .masthead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand .glyph {
+    width: 34px; height: 34px; border-radius: 9px; flex: none;
+    display: grid; place-items: center;
+    background: var(--accent); color: var(--accent-ink);
+    font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 18px;
+  }
+  .brand h1 { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 20px; margin: 0; letter-spacing: -.02em; }
+  .repo-link {
+    font-size: 13px; color: var(--muted); text-decoration: none;
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 13px;
+    display: inline-flex; align-items: center; gap: 7px; background: var(--surface);
+    transition: border-color .15s, color .15s;
+  }
+  .repo-link:hover { color: var(--ink); border-color: var(--accent); }
+
+  .hero { margin-top: clamp(30px, 6vw, 54px); }
+  .eyebrow {
+    font-family: "JetBrains Mono", monospace; font-size: 12px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent); margin: 0 0 14px;
+  }
+  .hero h2 {
+    font-family: "Archivo", sans-serif; font-weight: 800; letter-spacing: -.03em;
+    font-size: clamp(30px, 5.6vw, 50px); line-height: 1.04; margin: 0;
+    text-wrap: balance;
+  }
+  .hero p.lede {
+    font-size: clamp(16px, 2.2vw, 18.5px); color: var(--muted);
+    max-width: 60ch; margin: 18px 0 0;
+  }
+
+  /* ---- console ---- */
+  .console {
+    margin-top: 30px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+  }
+  .console-bar {
+    display: flex; align-items: center; gap: 8px; padding: 11px 16px;
+    border-bottom: 1px solid var(--line); background: var(--surface-2);
+    font-family: "JetBrains Mono", monospace; font-size: 12.5px; color: var(--faint);
+  }
+  .dot3 { display: inline-flex; gap: 6px; margin-right: 6px; }
+  .dot3 i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+  .console-body { padding: clamp(18px, 3vw, 26px); }
+
+  .prompt-row { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+  .field {
+    flex: 1 1 260px; display: flex; align-items: center; gap: 10px;
+    background: var(--surface-2); border: 1.5px solid var(--line);
+    border-radius: 11px; padding: 0 14px; transition: border-color .15s, box-shadow .15s;
+  }
+  .field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
+  .field .chev { color: var(--accent); font-family: "JetBrains Mono", monospace; font-weight: 700; }
+  .field input {
+    flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink);
+    font-family: "JetBrains Mono", monospace; font-size: 15px; padding: 14px 0;
+  }
+  .field input::placeholder { color: var(--faint); }
+  button.run {
+    flex: none; border: 0; border-radius: 11px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink);
+    font-family: "Inter", sans-serif; font-weight: 600; font-size: 15px; padding: 0 22px;
+    transition: filter .15s, transform .05s;
+  }
+  button.run:hover { filter: brightness(1.07); }
+  button.run:active { transform: translateY(1px); }
+
+  .examples { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+  .examples .lbl { font-size: 12px; color: var(--faint); font-family: "JetBrains Mono", monospace; margin-right: 4px; }
+  .chip {
+    font-family: "JetBrains Mono", monospace; font-size: 12.5px; cursor: pointer;
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--muted);
+    border-radius: 999px; padding: 5px 11px; transition: all .13s;
+  }
+  .chip:hover { color: var(--ink); border-color: var(--accent); background: var(--surface); }
+
+  /* ---- verdict ---- */
+  .verdict { margin-top: 22px; }
+  .verdict:empty { display: none; }
+  .card {
+    border: 1px solid var(--v-line, var(--line)); border-radius: 13px; overflow: hidden;
+    background: var(--surface); animation: rise .32s cubic-bezier(.2,.7,.2,1) both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .card { animation: none; } }
+
+  .card-head { display: flex; align-items: flex-start; gap: 16px; padding: 20px 22px; background: var(--v-bg, var(--surface-2)); }
+  .card-head .status {
+    width: 12px; height: 12px; border-radius: 50%; margin-top: 7px; flex: none;
+    background: var(--v-color, var(--muted)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--v-color, var(--muted)) 20%, transparent);
+  }
+  .card-head .who { flex: 1; min-width: 0; }
+  .card-head .domain { font-family: "JetBrains Mono", monospace; font-size: 13px; color: var(--muted); }
+  .card-head .prov { font-family: "Archivo", sans-serif; font-weight: 800; font-size: clamp(21px, 3.4vw, 27px); letter-spacing: -.02em; margin-top: 2px; color: var(--v-color, var(--ink)); text-wrap: balance; }
+  .pill {
+    flex: none; align-self: center; font-family: "JetBrains Mono", monospace; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .08em; font-weight: 700;
+    padding: 6px 11px; border-radius: 999px;
+    color: var(--v-color, var(--muted)); background: var(--surface);
+    border: 1px solid var(--v-line, var(--line));
+  }
+  .verdict-line {
+    display: flex; align-items: center; gap: 9px; padding: 13px 22px;
+    border-top: 1px solid var(--line); font-size: 14.5px;
+  }
+  .verdict-line b { font-weight: 600; }
+  .uses-yes { color: var(--gateway); }
+  .uses-no { color: var(--native); }
+  .mx-block { padding: 6px 22px 20px; }
+  .mx-block .cap { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .1em; margin: 10px 0 8px; }
+  .mx-list { font-family: "JetBrains Mono", monospace; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+  .mx-list .rec { color: var(--muted); overflow-x: auto; white-space: nowrap; padding: 3px 0; }
+  .mx-list .rec.matched { color: var(--v-color, var(--ink)); font-weight: 500; }
+  .mx-list .rec.matched::after { content: " ◂ matched"; color: var(--v-color); font-size: 11px; font-weight: 700; }
+  .mx-list .rec .pref { color: var(--faint); }
+
+  .note {
+    margin-top: 22px; border: 1px dashed var(--line); border-radius: 12px;
+    padding: 18px 20px; background: var(--surface-2);
+  }
+  .note h4 { margin: 0 0 6px; font-family: "Archivo", sans-serif; font-size: 15px; }
+  .note p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+  .note textarea {
+    width: 100%; min-height: 78px; resize: vertical; border-radius: 10px;
+    border: 1.5px solid var(--line); background: var(--surface); color: var(--ink);
+    font-family: "JetBrains Mono", monospace; font-size: 13px; padding: 12px 14px; outline: 0;
+  }
+  .note textarea:focus { border-color: var(--accent); }
+  .note .mini { margin-top: 10px; border: 0; background: var(--ink); color: var(--bg); font-weight: 600; font-family: "Inter", sans-serif; font-size: 13.5px; padding: 9px 16px; border-radius: 9px; cursor: pointer; }
+
+  /* ---- sections ---- */
+  section.block { margin-top: clamp(46px, 8vw, 76px); }
+  section.block > h3 {
+    font-family: "Archivo", sans-serif; font-weight: 700; font-size: 13px;
+    text-transform: uppercase; letter-spacing: .14em; color: var(--faint);
+    margin: 0 0 20px; padding-bottom: 12px; border-bottom: 1px solid var(--line);
+  }
+  .cov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+  .cov {
+    display: flex; align-items: center; gap: 11px; padding: 13px 15px;
+    border: 1px solid var(--line); border-radius: 11px; background: var(--surface);
+  }
+  .cov .swatch { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .cov .n { font-family: "Inter", sans-serif; font-weight: 500; font-size: 14.5px; }
+  .cov .c { display: block; font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--faint); margin-top: 1px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 22px; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+  .legend i { width: 9px; height: 9px; border-radius: 50%; }
+
+  .install { display: grid; gap: 12px; }
+  .cmd {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+    padding: 14px 16px; font-family: "JetBrains Mono", monospace; font-size: 14px;
+    overflow-x: auto;
+  }
+  .cmd .c-txt { white-space: nowrap; }
+  .cmd .c-txt .muted { color: var(--faint); }
+  .copy { flex: none; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: "Inter", sans-serif; }
+  .copy:hover { color: var(--ink); border-color: var(--accent); }
+
+  footer { margin-top: 60px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--faint); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--accent); }
+  .kbd { font-family: "JetBrains Mono", monospace; font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="masthead">
+    <div class="brand">
+      <div class="glyph mono">mx</div>
+      <h1>esgcheck</h1>
+    </div>
+    <a class="repo-link" href="https://github.com/floris-maker/esgcheck" target="_blank" rel="noopener">
+      <span class="mono">★</span> github.com/floris-maker/esgcheck
+    </a>
+  </div>
+
+  <div class="hero">
+    <p class="eyebrow">email security gateway detector</p>
+    <h2>Find out which gateway is guarding an inbox.</h2>
+    <p class="lede">
+      Give it an email or a domain. It reads the domain's <span class="mono">MX</span> records and tells you whether inbound mail is screened by a third-party security gateway — Proofpoint, Mimecast, Barracuda and friends — or just handled by a native provider. The signal that decides whether your cold email ever lands.
+    </p>
+  </div>
+
+  <div class="console">
+    <div class="console-bar">
+      <span class="dot3"><i></i><i></i><i></i></span>
+      <span>esgcheck &mdash; live demo</span>
+    </div>
+    <div class="console-body">
+      <form class="prompt-row" id="form" autocomplete="off">
+        <label class="field">
+          <span class="chev">&gt;</span>
+          <input id="q" type="text" placeholder="john@ford.com  ·  or a bare domain" spellcheck="false" aria-label="email or domain">
+        </label>
+        <button class="run" type="submit">Check</button>
+      </form>
+
+      <div class="examples" id="examples">
+        <span class="lbl">try:</span>
+      </div>
+
+      <div class="verdict" id="verdict" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <section class="block">
+    <h3>What the verdict means</h3>
+    <div class="legend">
+      <span><i style="background:var(--gateway)"></i> security gateway — screened hard</span>
+      <span><i style="background:var(--native)"></i> native provider — standard filtering</span>
+      <span><i style="background:var(--unknown)"></i> unknown — self-hosted / unrecognized</span>
+      <span><i style="background:var(--nomx)"></i> no MX — can't receive mail</span>
+    </div>
+    <div class="cov-grid" id="coverage"></div>
+  </section>
+
+  <section class="block">
+    <h3>Run it live from your terminal</h3>
+    <p style="color:var(--muted); margin:-6px 0 18px; font-size:14.5px; max-width:62ch;">This page ships with baked MX data so it works offline in a sandbox. The command-line tool does real DNS lookups against any domain on earth.</p>
+    <div class="install">
+      <div class="cmd"><span class="c-txt"><span class="muted">$ </span>pip install esgcheck</span><button class="copy" data-copy="pip install esgcheck">copy</button></div>
+      <div class="cmd"><span class="c-txt"><span class="muted">$ </span>esgcheck john@ford.com</span><button class="copy" data-copy="esgcheck john@ford.com">copy</button></div>
+      <div class="cmd"><span class="c-txt"><span class="muted">$ </span>esgcheck acme.com --json</span><button class="copy" data-copy="esgcheck acme.com --json">copy</button></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>MIT licensed · MX-based detection, no mail sent · <span class="kbd">enter</span> to check</span>
+    <a href="https://github.com/floris-maker/esgcheck" target="_blank" rel="noopener">Contribute a provider →</a>
+  </footer>
+</div>
+
+<script>
+  // ---- detection engine: a direct port of esgcheck/providers.py + detect.py ----
+  const SECURITY_GATEWAY = "security_gateway", NATIVE_PROVIDER = "native_provider";
+  const PROVIDERS = [
+    { name: "Proofpoint", category: SECURITY_GATEWAY, patterns: ["pphosted.com","ppe-hosted.com"] },
+    { name: "Mimecast", category: SECURITY_GATEWAY, patterns: ["mimecast.com","mimecast.co.za","mimecast-offshore.com","mimecast.com.au"] },
+    { name: "Barracuda", category: SECURITY_GATEWAY, patterns: ["barracudanetworks.com","barracuda.com"] },
+    { name: "Cisco Secure Email", category: SECURITY_GATEWAY, patterns: ["iphmx.com"] },
+    { name: "Sophos Email", category: SECURITY_GATEWAY, patterns: ["sophos.com"] },
+    { name: "Symantec Email Security.cloud", category: SECURITY_GATEWAY, patterns: ["messagelabs.com"] },
+    { name: "Forcepoint Email Security", category: SECURITY_GATEWAY, patterns: ["mailcontrol.com"] },
+    { name: "Trend Micro Email Security", category: SECURITY_GATEWAY, patterns: ["hes.trendmicro.com","trendmicro.com"] },
+    { name: "Cloudflare Email Security", category: SECURITY_GATEWAY, patterns: ["cf-emailsecurity.net","mx.cloudflare.net"] },
+    { name: "Trellix Email Security", category: SECURITY_GATEWAY, patterns: ["fireeyecloud.com"] },
+    { name: "Perception Point", category: SECURITY_GATEWAY, patterns: ["perceptionpoint.io"] },
+    { name: "MailChannels", category: SECURITY_GATEWAY, patterns: ["mailchannels.net"] },
+    { name: "Mailprotector", category: SECURITY_GATEWAY, patterns: ["mailprotector.com"] },
+    { name: "FortiMail Cloud", category: SECURITY_GATEWAY, patterns: ["fortimail.com"] },
+    { name: "Microsoft 365 (EOP)", category: NATIVE_PROVIDER, patterns: ["mail.protection.outlook.com","protection.outlook.com","mx.microsoft","outlook.com"] },
+    { name: "Google Workspace", category: NATIVE_PROVIDER, patterns: ["google.com","googlemail.com"] },
+    { name: "Zoho", category: NATIVE_PROVIDER, patterns: ["zoho.com","zoho.eu","zohomail.com"] },
+  ];
+  const norm = h => h.trim().replace(/\.+$/,"").toLowerCase();
+  const hits = (h,p) => h === p || h.endsWith("." + p);
+  function identify(host){ for(const p of PROVIDERS){ for(const pat of p.patterns){ if(hits(host,pat)) return p; } } return null; }
+  function detect(domain, mx){
+    const clean = mx.filter(m => m && m.trim());
+    if(!clean.length) return { domain, esg:null, category:"no_mx", uses_esg:false, mx_records:[], matched_mx:null };
+    let gw=null, nat=null;
+    for(const raw of clean){ const p = identify(norm(raw)); if(!p) continue;
+      if(p.category===SECURITY_GATEWAY && !gw) gw=[p,raw]; else if(p.category===NATIVE_PROVIDER && !nat) nat=[p,raw]; }
+    const hit = gw || nat;
+    if(!hit) return { domain, esg:null, category:"unknown", uses_esg:false, mx_records:clean, matched_mx:null };
+    const [prov, matched] = hit;
+    return { domain, esg:prov.name, category:prov.category, uses_esg:prov.category===SECURITY_GATEWAY, mx_records:clean, matched_mx:matched };
+  }
+  function extractDomain(s){
+    if(s==null) throw new Error("empty");
+    let v = s.trim().toLowerCase();
+    if(!v) throw new Error("empty");
+    if(v.includes("@")) v = v.split("@").pop();
+    if(!v || !v.includes(".") || v.includes(" ")) throw new Error("not a valid email or domain");
+    return v;
+  }
+
+  // ---- baked real MX data (captured with the tool's own resolver) ----
+  const DATA = {
+    "ford.com": ["mxa-00498f03.gslb.pphosted.com","mxb-00498f03.gslb.pphosted.com"],
+    "fedex.com": ["mapper.gslb.fedex.com","mxa-0002ee02.gslb.pphosted.com","mxb-0002ee02.gslb.pphosted.com"],
+    "salesforce.com": ["mxa-00177002.gslb.pphosted.com","mxb-00177002.gslb.pphosted.com"],
+    "harvard.edu": ["mx0a-00171101.pphosted.com","mx0b-00171101.pphosted.com"],
+    "hsbc.com": ["mxa-00299f02.gslb.pphosted.com","mxb-00299f02.gslb.pphosted.com"],
+    "oracle.com": ["mxa-00069f01.gslb.pphosted.com","mxb-00069f01.gslb.pphosted.com"],
+    "toyota.com": ["mxa-001f1301.gslb.pphosted.com","mxb-001f1301.gslb.pphosted.com"],
+    "ryanair.com": ["de-smtp-inbound-1.mimecast.com","de-smtp-inbound-2.mimecast.com"],
+    "barracuda.com": ["d160221a.ess.barracudanetworks.com","d160221b.ess.barracudanetworks.com"],
+    "cloudflare.com": ["mxa-canary.global.inbound.cf-emailsecurity.net","mxb-canary.global.inbound.cf-emailsecurity.net","mxa.global.inbound.cf-emailsecurity.net","mxb.global.inbound.cf-emailsecurity.net"],
+    "sophos.com": ["mx-01-eu-west-1.prod.hydra.sophos.com","mx-02-eu-west-1.prod.hydra.sophos.com"],
+    "trendmicro.com": ["mad666.in.tmes.trendmicro.com"],
+    "microsoft.com": ["microsoft-com.mail.protection.outlook.com"],
+    "adidas.com": ["adidas-com.mail.protection.outlook.com"],
+    "jetblue.com": ["jetblue-com.mail.protection.outlook.com"],
+    "siemens.com": ["siemens-com.h-v1.mx.microsoft"],
+    "google.com": ["smtp.google.com"],
+    "stripe.com": ["aspmx.l.google.com","alt1.aspmx.l.google.com","alt2.aspmx.l.google.com","aspmx3.googlemail.com","aspmx2.googlemail.com"],
+    "shopify.com": ["aspmx.l.google.com","alt1.aspmx.l.google.com","alt2.aspmx.l.google.com","alt3.aspmx.l.google.com","alt4.aspmx.l.google.com"],
+    "vectify.io": ["smtp.google.com"],
+    "zoho.com": ["smtpin.zoho.com","smtpin2.zoho.com","smtpin3.zoho.com"],
+    "cisco.com": ["alln-mx-01.cisco.com","rcdn-mx-01.cisco.com","aer-mx-01.cisco.com"],
+    "intel.com": ["mgamail.eglb.intel.com"],
+    "nhs.uk": ["mail.nhs.uk"],
+    "samsung.com": ["mailin.samsung.com"],
+    "example.com": [],
+  };
+  const CHIPS = ["ford.com","ryanair.com","cloudflare.com","barracuda.com","sophos.com","microsoft.com","siemens.com","google.com","zoho.com","cisco.com","nhs.uk","example.com"];
+
+  const V = { security_gateway:{color:"--gateway",bg:"--gateway-bg",line:"--gateway-line",label:"security gateway"},
+              native_provider:{color:"--native",bg:"--native-bg",line:"--native-line",label:"native provider"},
+              unknown:{color:"--unknown",bg:"--unknown-bg",line:"--unknown-line",label:"unknown"},
+              no_mx:{color:"--nomx",bg:"--nomx-bg",line:"--nomx-line",label:"no mail server"} };
+  const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+  function displayName(r){
+    if(r.esg) return r.esg;
+    if(r.category==="no_mx") return "No mail server";
+    return "Unknown provider";
+  }
+  function renderVerdict(r){
+    const v = V[r.category];
+    const rows = r.mx_records.map(m =>
+      `<div class="rec mono${m===r.matched_mx?" matched":""}">${esc(m)}</div>`).join("");
+    const mxSection = r.mx_records.length
+      ? `<div class="mx-block"><div class="cap">MX records</div><div class="mx-list">${rows}</div></div>`
+      : `<div class="mx-block"><div class="cap">MX records</div><div class="mx-list"><div class="rec mono">— none —</div></div></div>`;
+    const el = document.getElementById("verdict");
+    el.innerHTML = `
+      <div class="card" style="--v-color:var(${v.color});--v-bg:var(${v.bg});--v-line:var(${v.line})">
+        <div class="card-head">
+          <span class="status"></span>
+          <div class="who">
+            <div class="domain mono">${esc(r.domain)}</div>
+            <div class="prov">${esc(displayName(r))}</div>
+          </div>
+          <span class="pill">${v.label}</span>
+        </div>
+        <div class="verdict-line">
+          <b>Uses a security gateway:</b>
+          <span class="${r.uses_esg?"uses-yes":"uses-no"}"><b>${r.uses_esg?"yes":"no"}</b></span>
+        </div>
+        ${mxSection}
+      </div>`;
+  }
+
+  function renderMiss(domain){
+    const el = document.getElementById("verdict");
+    el.innerHTML = `
+      <div class="note">
+        <h4>No baked data for <span class="mono">${esc(domain)}</span></h4>
+        <p>This offline demo only carries MX records for the sample domains above. To check this one for real, run <span class="mono">esgcheck ${esc(domain)}</span> — or paste its MX records and I'll classify them right here:</p>
+        <textarea id="mxpaste" placeholder="mx1.${esc(domain)}.pphosted.com&#10;mx2.${esc(domain)}.pphosted.com"></textarea>
+        <button class="mini" id="mxrun">Classify these MX records</button>
+      </div>`;
+    document.getElementById("mxrun").addEventListener("click", () => {
+      const lines = document.getElementById("mxpaste").value.split(/[\s,]+/).map(x=>x.trim()).filter(Boolean);
+      renderVerdict(detect(domain, lines));
+    });
+  }
+
+  function check(input){
+    let domain;
+    try { domain = extractDomain(input); }
+    catch(e){ renderMiss(input || "that"); return; }
+    if(domain in DATA) renderVerdict(detect(domain, DATA[domain]));
+    else renderMiss(domain);
+  }
+
+  // ---- wiring ----
+  const exWrap = document.getElementById("examples");
+  CHIPS.forEach(d => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip mono"; b.textContent = d;
+    b.addEventListener("click", () => { document.getElementById("q").value = d; check(d); });
+    exWrap.appendChild(b);
+  });
+
+  document.getElementById("form").addEventListener("submit", e => {
+    e.preventDefault(); check(document.getElementById("q").value);
+  });
+
+  // coverage grid
+  const cov = document.getElementById("coverage");
+  PROVIDERS.forEach(p => {
+    const v = V[p.category];
+    const d = document.createElement("div");
+    d.className = "cov";
+    d.innerHTML = `<span class="swatch" style="background:var(${v.color})"></span>
+      <span><span class="n">${p.name}</span><span class="c">${p.patterns[0]}</span></span>`;
+    cov.appendChild(d);
+  });
+
+  // copy buttons
+  document.querySelectorAll(".copy").forEach(b => {
+    b.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copy); const t=b.textContent; b.textContent="copied"; setTimeout(()=>b.textContent=t,1200); } catch(e){}
+    });
+  });
+
+  // open on a gateway so the amber "detected" state is the first thing seen
+  document.getElementById("q").value = "john@ford.com";
+  check("john@ford.com");
+</script>
+</body>
+</html>
