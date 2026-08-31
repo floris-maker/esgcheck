@@ -163,6 +163,8 @@
   /* ---- verdict ---- */
   .verdict { margin-top: 22px; }
   .verdict:empty { display: none; }
+  .resolving { color: var(--muted); font-size: 13.5px; padding: 14px 2px; }
+  .resolving::after { content: ""; }
   .card {
     border: 1px solid var(--v-line, var(--line)); border-radius: 13px; overflow: hidden;
     background: var(--surface); animation: rise .32s cubic-bezier(.2,.7,.2,1) both;
@@ -434,13 +436,18 @@
       </div>`;
   }
 
+  function renderResolving(domain){
+    document.getElementById("verdict").innerHTML =
+      `<div class="resolving mono">resolving MX for ${esc(domain)} …</div>`;
+  }
+
   function renderMiss(domain){
     const el = document.getElementById("verdict");
     el.innerHTML = `
       <div class="note">
-        <h4>No baked data for <span class="mono">${esc(domain)}</span></h4>
-        <p>This offline demo only carries MX records for the sample domains above. To check this one for real, run <span class="mono">esgcheck ${esc(domain)}</span> — or paste its MX records and I'll classify them right here:</p>
-        <textarea id="mxpaste" placeholder="mx1.${esc(domain)}.pphosted.com&#10;mx2.${esc(domain)}.pphosted.com"></textarea>
+        <h4>Couldn't look up <span class="mono">${esc(domain)}</span> from here</h4>
+        <p>This page does a live DNS lookup when it's hosted normally — but network calls are blocked inside Claude's artifact sandbox, so live checks only work on the <a href="https://github.com/floris-maker/esgcheck" target="_blank" rel="noopener" style="color:var(--accent)">self-hosted page</a> or the CLI (<span class="mono">esgcheck ${esc(domain)}</span>). Or paste the MX records and I'll classify them right now:</p>
+        <textarea id="mxpaste" placeholder="d110185a.ess.barracudanetworks.com&#10;d110185b.ess.barracudanetworks.com"></textarea>
         <button class="mini" id="mxrun">Classify these MX records</button>
       </div>`;
     document.getElementById("mxrun").addEventListener("click", () => {
@@ -449,12 +456,33 @@
     });
   }
 
-  function check(input){
+  // Live MX resolution via DNS-over-HTTPS (Cloudflare, CORS-enabled).
+  // Works on normal hosting (e.g. GitHub Pages); blocked by CSP inside the artifact sandbox.
+  async function resolveMxLive(domain){
+    const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(domain) + "&type=MX";
+    const res = await fetch(url, { headers: { accept: "application/dns-json" } });
+    if(!res.ok) throw new Error("doh " + res.status);
+    const data = await res.json();
+    return (data.Answer || [])
+      .filter(a => a.type === 15)
+      .map(a => { const p = a.data.trim().split(/\s+/); return { pref: parseInt(p[0], 10) || 0, host: (p[1] || "").replace(/\.+$/, "") }; })
+      .filter(x => x.host)
+      .sort((a, b) => a.pref - b.pref)
+      .map(x => x.host);
+  }
+
+  async function check(input){
     let domain;
     try { domain = extractDomain(input); }
     catch(e){ renderMiss(input || "that"); return; }
-    if(domain in DATA) renderVerdict(detect(domain, DATA[domain]));
-    else renderMiss(domain);
+    if(domain in DATA){ renderVerdict(detect(domain, DATA[domain])); return; }
+    renderResolving(domain);
+    try {
+      const mx = await resolveMxLive(domain);
+      renderVerdict(detect(domain, mx));
+    } catch(e){
+      renderMiss(domain);
+    }
   }
 
   // ---- wiring ----
