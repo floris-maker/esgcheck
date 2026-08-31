@@ -303,6 +303,7 @@
       <span><i style="background:var(--native)"></i> native provider — standard filtering</span>
       <span><i style="background:var(--unknown)"></i> unknown — self-hosted / unrecognized</span>
       <span><i style="background:var(--nomx)"></i> no MX — can't receive mail</span>
+      <span><i style="background:var(--nomx)"></i> null MX — refuses all mail</span>
     </div>
     <div class="cov-grid" id="coverage"></div>
   </section>
@@ -341,29 +342,46 @@
     { name: "MailChannels", category: SECURITY_GATEWAY, patterns: ["mailchannels.net"] },
     { name: "Mailprotector", category: SECURITY_GATEWAY, patterns: ["mailprotector.com"] },
     { name: "FortiMail Cloud", category: SECURITY_GATEWAY, patterns: ["fortimail.com"] },
+    { name: "Hornetsecurity", category: SECURITY_GATEWAY, patterns: ["antispameurope.com","hornetsecurity.com"] },
+    { name: "AppRiver", category: SECURITY_GATEWAY, patterns: ["arsmtp.com"] },
+    { name: "Retarus", category: SECURITY_GATEWAY, patterns: ["retarus.com"] },
     { name: "Microsoft 365 (EOP)", category: NATIVE_PROVIDER, patterns: ["mail.protection.outlook.com","protection.outlook.com","mx.microsoft","outlook.com"] },
     { name: "Google Workspace", category: NATIVE_PROVIDER, patterns: ["google.com","googlemail.com"] },
     { name: "Zoho", category: NATIVE_PROVIDER, patterns: ["zoho.com","zoho.eu","zohomail.com"] },
+    { name: "Fastmail", category: NATIVE_PROVIDER, patterns: ["messagingengine.com","fastmail.com"] },
+    { name: "Proton Mail", category: NATIVE_PROVIDER, patterns: ["protonmail.ch"] },
+    { name: "Rackspace Email", category: NATIVE_PROVIDER, patterns: ["emailsrvr.com"] },
+    { name: "GoDaddy", category: NATIVE_PROVIDER, patterns: ["secureserver.net"] },
+    { name: "OVH", category: NATIVE_PROVIDER, patterns: ["ovh.net"] },
+    { name: "IONOS", category: NATIVE_PROVIDER, patterns: ["1and1.com","kundenserver.de"] },
+    { name: "Namecheap Private Email", category: NATIVE_PROVIDER, patterns: ["privateemail.com"] },
+    { name: "Yandex", category: NATIVE_PROVIDER, patterns: ["yandex.ru","yandex.net"] },
   ];
   const norm = h => h.trim().replace(/\.+$/,"").toLowerCase();
   const hits = (h,p) => h === p || h.endsWith("." + p);
   function identify(host){ for(const p of PROVIDERS){ for(const pat of p.patterns){ if(hits(host,pat)) return p; } } return null; }
   function detect(domain, mx){
-    const clean = mx.filter(m => m && m.trim());
-    if(!clean.length) return { domain, esg:null, category:"no_mx", uses_esg:false, mx_records:[], matched_mx:null };
+    const present = mx.filter(m => m && m.trim());
+    if(!present.length) return { domain, esg:null, category:"no_mx", uses_esg:false, mx_records:[], matched_mx:null };
+    if(present.every(m => norm(m) === "")) return { domain, esg:null, category:"null_mx", uses_esg:false, mx_records:present, matched_mx:null };
     let gw=null, nat=null;
-    for(const raw of clean){ const p = identify(norm(raw)); if(!p) continue;
+    for(const raw of present){ const h = norm(raw); if(!h) continue; const p = identify(h); if(!p) continue;
       if(p.category===SECURITY_GATEWAY && !gw) gw=[p,raw]; else if(p.category===NATIVE_PROVIDER && !nat) nat=[p,raw]; }
     const hit = gw || nat;
-    if(!hit) return { domain, esg:null, category:"unknown", uses_esg:false, mx_records:clean, matched_mx:null };
+    if(!hit) return { domain, esg:null, category:"unknown", uses_esg:false, mx_records:present, matched_mx:null };
     const [prov, matched] = hit;
-    return { domain, esg:prov.name, category:prov.category, uses_esg:prov.category===SECURITY_GATEWAY, mx_records:clean, matched_mx:matched };
+    return { domain, esg:prov.name, category:prov.category, uses_esg:prov.category===SECURITY_GATEWAY, mx_records:present, matched_mx:matched };
   }
   function extractDomain(s){
     if(s==null) throw new Error("empty");
-    let v = s.trim().toLowerCase();
+    let v = String(s).trim();
     if(!v) throw new Error("empty");
+    if(v.includes("<") && v.includes(">")){ const inner = v.slice(v.indexOf("<")+1, v.indexOf(">")).trim(); if(inner) v = inner; }
+    v = v.trim().replace(/^["']+|["']+$/g, "").trim().toLowerCase();
+    if(v.startsWith("mailto:")) v = v.slice(7);
+    if(v.includes("://")) v = v.split("://")[1];
     if(v.includes("@")) v = v.split("@").pop();
+    v = v.split("/")[0].split("?")[0].split(":")[0].trim().replace(/\.+$/, "");
     if(!v || !v.includes(".") || v.includes(" ")) throw new Error("not a valid email or domain");
     return v;
   }
@@ -395,19 +413,25 @@
     "intel.com": ["mgamail.eglb.intel.com"],
     "nhs.uk": ["mail.nhs.uk"],
     "samsung.com": ["mailin.samsung.com"],
+    "hornetsecurity.com": ["hsmx03.antispameurope.com","hsmx01.antispameurope.com"],
+    "proton.me": ["mail.protonmail.ch","mailsec.protonmail.ch"],
+    "fastmail.com": ["in1-smtp.messagingengine.com","in2-smtp.messagingengine.com"],
+    "ovh.com": ["mx1.ovh.net","mx2.ovh.net"],
     "example.com": [],
   };
-  const CHIPS = ["ford.com","ryanair.com","cloudflare.com","barracuda.com","sophos.com","microsoft.com","siemens.com","google.com","zoho.com","cisco.com","nhs.uk","example.com"];
+  const CHIPS = ["ford.com","ryanair.com","cloudflare.com","barracuda.com","hornetsecurity.com","sophos.com","microsoft.com","siemens.com","google.com","proton.me","zoho.com","cisco.com","nhs.uk","example.com"];
 
   const V = { security_gateway:{color:"--gateway",bg:"--gateway-bg",line:"--gateway-line",label:"security gateway"},
               native_provider:{color:"--native",bg:"--native-bg",line:"--native-line",label:"native provider"},
               unknown:{color:"--unknown",bg:"--unknown-bg",line:"--unknown-line",label:"unknown"},
-              no_mx:{color:"--nomx",bg:"--nomx-bg",line:"--nomx-line",label:"no mail server"} };
+              no_mx:{color:"--nomx",bg:"--nomx-bg",line:"--nomx-line",label:"no mail server"},
+              null_mx:{color:"--nomx",bg:"--nomx-bg",line:"--nomx-line",label:"mail refused (null MX)"} };
   const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
   function displayName(r){
     if(r.esg) return r.esg;
     if(r.category==="no_mx") return "No mail server";
+    if(r.category==="null_mx") return "Mail refused (null MX)";
     return "Unknown provider";
   }
   function renderVerdict(r){

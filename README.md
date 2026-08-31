@@ -90,7 +90,7 @@ check_mx("john@acme.com", ["us-smtp-inbound-1.mimecast.com"]).esg   # "Mimecast"
 |-------|---------|
 | `domain` | the domain that was checked |
 | `esg` | the detected provider name, or `None` |
-| `category` | `security_gateway`, `native_provider`, `unknown`, or `no_mx` |
+| `category` | `security_gateway`, `native_provider`, `unknown`, `null_mx`, or `no_mx` |
 | `uses_esg` | `True` only when a third-party security gateway is detected |
 | `mx_records` | the raw MX hostnames the verdict is based on |
 | `matched_mx` | the specific MX hostname that identified the provider |
@@ -98,9 +98,16 @@ check_mx("john@acme.com", ["us-smtp-inbound-1.mimecast.com"]).esg   # "Mimecast"
 ## Verdict categories
 
 - **`security_gateway`** — a third-party ESG is in front of the inbox. This is the "yes, it uses an ESG" case.
-- **`native_provider`** — Microsoft 365, Google Workspace, or Zoho. Built-in filtering, but no dedicated third-party gateway.
+- **`native_provider`** — a mailbox host with built-in filtering but no dedicated third-party gateway (Microsoft 365, Google Workspace, Zoho, Fastmail, Proton Mail, and others).
 - **`unknown`** — has MX records but matches no known provider (likely self-hosted).
-- **`no_mx`** — the domain has no MX records and cannot receive mail.
+- **`null_mx`** — the domain publishes an [RFC 7505](https://www.rfc-editor.org/rfc/rfc7505) null MX (`.`): it explicitly refuses all mail.
+- **`no_mx`** — the domain has no MX records at all and cannot receive mail.
+
+## Resiliency
+
+- **Input** — accepts a bare domain, an email, and messy pasted forms: `Name <a@b.com>`, `mailto:a@b.com`, quoted addresses, a full URL, and a trailing port.
+- **DNS** — queries the system resolver first and falls back to public resolvers (Cloudflare `1.1.1.1`, then Google `8.8.8.8`) on timeout or resolver failure, so a flaky local resolver doesn't produce a false negative.
+- **IDN** — internationalized domains are handled by the resolver's IDNA support.
 
 ## Adding a provider
 

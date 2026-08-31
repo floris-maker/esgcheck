@@ -24,16 +24,35 @@ class DNSLookupError(Exception):
 def extract_domain(email_or_domain: str) -> str:
     """Extract and normalize the domain from an email address or bare domain.
 
-    Raises ``ValueError`` for empty or clearly-invalid input.
+    Tolerates real-world input people paste: display-name/angle-bracket forms
+    (``Name <a@b.com>``), a ``mailto:`` prefix, surrounding quotes, a pasted
+    URL, and a trailing port. Raises ``ValueError`` for empty or clearly-invalid
+    input.
     """
     if email_or_domain is None:
         raise ValueError("no input given")
-    value = email_or_domain.strip().lower()
+    value = str(email_or_domain).strip()
     if not value:
         raise ValueError("empty input")
 
+    # "Display Name <user@domain>" -> take what's inside the angle brackets
+    if "<" in value and ">" in value:
+        inner = value[value.find("<") + 1:value.find(">")].strip()
+        if inner:
+            value = inner
+
+    value = value.strip().strip("\"'").strip().lower()
+
+    if value.startswith("mailto:"):
+        value = value[len("mailto:"):]
+    if "://" in value:              # tolerate a pasted URL
+        value = value.split("://", 1)[1]
     if "@" in value:
         value = value.rsplit("@", 1)[1]
+    value = value.split("/", 1)[0]  # drop any path
+    value = value.split("?", 1)[0]  # drop any query
+    value = value.split(":", 1)[0]  # drop any port
+    value = value.strip().rstrip(".")
 
     if not value or "." not in value or " " in value:
         raise ValueError(f"not a valid email or domain: {email_or_domain!r}")

@@ -13,6 +13,7 @@ CATEGORY_LABEL = {
     "native_provider": "native provider",
     "unknown": "unknown",
     "no_mx": "no mail server",
+    "null_mx": "mail refused (null MX)",
 }
 
 
@@ -20,6 +21,7 @@ def render_text(result) -> str:
     """Human-readable one-block summary of a Result."""
     name = result.esg or {
         "no_mx": "No mail server",
+        "null_mx": "Mail refused (null MX)",
         "unknown": "Unknown (self-hosted or unrecognized)",
     }.get(result.category, "Unknown")
 

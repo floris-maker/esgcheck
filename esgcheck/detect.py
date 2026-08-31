@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from .providers import PROVIDERS, SECURITY_GATEWAY, NATIVE_PROVIDER
 
 NO_MX = "no_mx"
+NULL_MX = "null_mx"
 UNKNOWN = "unknown"
 
 
@@ -58,16 +59,24 @@ def _identify(hostname: str):
 
 def detect(domain: str, mx_records: list[str]) -> Result:
     """Classify ``domain`` from its ``mx_records`` (list of MX hostnames)."""
-    normalized = [_normalize(mx) for mx in mx_records if mx and mx.strip()]
+    present = [mx for mx in mx_records if mx and str(mx).strip()]
 
-    if not normalized:
+    if not present:
         return Result(domain, None, NO_MX, False, [], None)
+
+    # RFC 7505 null MX: a single "." exchange means the domain explicitly
+    # refuses all mail. Such entries normalize to an empty string.
+    if all(_normalize(mx) == "" for mx in present):
+        return Result(domain, None, NULL_MX, False, mx_records, None)
 
     # Collect every provider match, keeping MX order. Prefer a security gateway
     # over a native provider when a domain routes through both.
     gateway_hit = None
     native_hit = None
-    for original, host in zip(mx_records, normalized):
+    for original in present:
+        host = _normalize(original)
+        if not host:
+            continue
         found = _identify(host)
         if not found:
             continue

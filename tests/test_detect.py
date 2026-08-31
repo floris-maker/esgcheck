@@ -3,7 +3,8 @@
 import pytest
 
 from esgcheck import check_mx, extract_domain
-from esgcheck.detect import detect
+from esgcheck.detect import detect, NULL_MX
+from esgcheck.providers import PROVIDERS
 
 
 # --- extract_domain ---------------------------------------------------------
@@ -37,6 +38,26 @@ def test_extract_domain_rejects_no_domain():
 def test_extract_domain_rejects_garbage():
     with pytest.raises(ValueError):
         extract_domain("not an email or domain")
+
+
+def test_extract_domain_from_display_name_angle_brackets():
+    assert extract_domain("Jehan Doe <jehan@cjattorneys.com>") == "cjattorneys.com"
+
+
+def test_extract_domain_strips_mailto():
+    assert extract_domain("mailto:john@acme.com") == "acme.com"
+
+
+def test_extract_domain_strips_surrounding_quotes():
+    assert extract_domain('"john@acme.com"') == "acme.com"
+
+
+def test_extract_domain_tolerates_pasted_url():
+    assert extract_domain("https://acme.com/contact?x=1") == "acme.com"
+
+
+def test_extract_domain_drops_port():
+    assert extract_domain("acme.com:8443") == "acme.com"
 
 
 # --- detect: third-party security gateways ----------------------------------
@@ -118,6 +139,58 @@ def test_detect_no_mx():
     assert r.esg is None
     assert r.category == "no_mx"
     assert r.uses_esg is False
+
+
+def test_detect_null_mx():
+    # RFC 7505: a single "." exchange means the domain explicitly accepts no mail.
+    r = detect("refuses-mail.com", ["."])
+    assert r.esg is None
+    assert r.category == NULL_MX
+    assert r.uses_esg is False
+
+
+# --- detect: newly added providers ------------------------------------------
+
+def test_detect_hornetsecurity():
+    r = detect("acme.com", ["hsmx01.antispameurope.com", "hsmx03.antispameurope.com"])
+    assert r.esg == "Hornetsecurity"
+    assert r.category == "security_gateway"
+
+
+def test_detect_appriver():
+    r = detect("acme.com", ["acme.com.1.0001.arsmtp.com"])
+    assert r.esg == "AppRiver"
+    assert r.category == "security_gateway"
+
+
+def test_detect_proton_is_native():
+    r = detect("acme.com", ["mail.protonmail.ch", "mailsec.protonmail.ch"])
+    assert r.esg == "Proton Mail"
+    assert r.category == "native_provider"
+
+
+def test_detect_fastmail_is_native():
+    r = detect("acme.com", ["in1-smtp.messagingengine.com"])
+    assert r.esg == "Fastmail"
+    assert r.category == "native_provider"
+
+
+def test_detect_ovh_is_native():
+    r = detect("acme.com", ["mx1.ovh.net"])
+    assert r.esg == "OVH"
+    assert r.category == "native_provider"
+
+
+# --- guard: every provider pattern maps to its own provider, no false hits ---
+
+@pytest.mark.parametrize("provider", PROVIDERS, ids=lambda p: p["name"])
+def test_every_pattern_matches_its_provider_and_rejects_near_miss(provider):
+    for pattern in provider["patterns"]:
+        # a real subdomain of the pattern must resolve to this provider
+        assert detect("t.com", ["mx1." + pattern]).esg == provider["name"]
+        # a label-boundary look-alike must never match a *different* provider
+        # (it may still match this provider via a broader pattern it also owns)
+        assert detect("t.com", ["zz" + pattern]).esg in (None, provider["name"])
 
 
 # --- detect: matching robustness --------------------------------------------
