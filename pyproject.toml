@@ -25,6 +25,7 @@ dev = ["pytest>=7"]
 
 [project.urls]
 Homepage = "https://github.com/floris-maker/esgcheck"
+Demo = "https://floris-maker.github.io/esgcheck/"
 Issues = "https://github.com/floris-maker/esgcheck/issues"
 
 [project.scripts]

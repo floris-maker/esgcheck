@@ -2,6 +2,8 @@
 
 Detect which **Email Security Gateway (ESG)** a domain sits behind — from its DNS **MX records**.
 
+**▶ Live demo: https://floris-maker.github.io/esgcheck/** — type any domain, get the gateway.
+
 Give it an email address or a bare domain, and it tells you whether inbound mail is screened by a third-party gateway like **Proofpoint, Mimecast, Barracuda, Cisco Secure Email, Sophos, Symantec, Forcepoint, Trend Micro** (and more), or just handled by a native provider's built-in filtering (**Microsoft 365, Google Workspace, Zoho**).
 
 This is the signal that matters most for cold-email deliverability: a domain behind a dedicated security gateway screens inbound mail far more aggressively than one on plain M365 or Google.
