@@ -109,6 +109,10 @@ check_mx("john@acme.com", ["us-smtp-inbound-1.mimecast.com"]).esg   # "Mimecast"
 - **DNS** — queries the system resolver first and falls back to public resolvers (Cloudflare `1.1.1.1`, then Google `8.8.8.8`) on timeout or resolver failure, so a flaky local resolver doesn't produce a false negative.
 - **IDN** — internationalized domains are handled by the resolver's IDNA support.
 
+## What it can't detect
+
+Detection is MX-based, so it only sees gateways that sit **in front of** the inbox and change the domain's MX records. Modern API-based / ICES email security tools — **Abnormal, Avanan (Check Point Harmony), IRONSCALES, Material Security, GreatHorn** — plug into Microsoft 365 or Google *via API* and leave the MX records pointing at `outlook.com` / `google.com`. Those domains correctly report `native_provider`; there is no public DNS signal that reveals an API-based tool behind them.
+
 ## Adding a provider
 
 Detection data lives in [`esgcheck/providers.py`](esgcheck/providers.py) as a plain list. To add a gateway, append an entry with the MX-hostname suffixes that identify it:

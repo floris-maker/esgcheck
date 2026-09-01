@@ -157,9 +157,51 @@ def test_detect_hornetsecurity():
     assert r.category == "security_gateway"
 
 
-def test_detect_appriver():
+def test_detect_appriver_zix():
     r = detect("acme.com", ["acme.com.1.0001.arsmtp.com"])
-    assert r.esg == "AppRiver"
+    assert r.esg == "AppRiver / Zix"
+    assert r.category == "security_gateway"
+
+
+def test_detect_mailroute():
+    r = detect("acme.com", ["mail.mroute.net"])
+    assert r.esg == "MailRoute"
+    assert r.category == "security_gateway"
+
+
+def test_detect_spamhero():
+    r = detect("acme.com", ["acme-com.p10.spamhero.com", "acme-com.p20.spamhero.net"])
+    assert r.esg == "SpamHero"
+    assert r.category == "security_gateway"
+
+
+def test_detect_spamtitan():
+    r = detect("acme.com", ["eu1-smtp-mx1.titanhq.com"])
+    assert r.esg == "SpamTitan"
+    assert r.category == "security_gateway"
+
+
+def test_detect_libraesva():
+    r = detect("acme.com", ["mail.libraesva.com"])
+    assert r.esg == "Libraesva"
+    assert r.category == "security_gateway"
+
+
+def test_detect_mail_assure_spamexperts():
+    r = detect("acme.com", ["filter10.antispamcloud.com"])
+    assert r.esg == "N-able Mail Assure"
+    assert r.category == "security_gateway"
+
+
+def test_detect_fusemail():
+    r = detect("acme.com", ["acme.com.mx1.electric.net"])
+    assert r.esg == "FuseMail (VIPRE)"
+    assert r.category == "security_gateway"
+
+
+def test_detect_fortimail_cloud_suffix():
+    r = detect("acme.com", ["mail-1.fortimailcloud.com"])
+    assert r.esg == "FortiMail Cloud"
     assert r.category == "security_gateway"
 
 
